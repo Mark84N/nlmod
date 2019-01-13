@@ -130,8 +130,9 @@ int get_gnl_fam(int gnl_sock)
     gnlhdr = (struct genlmsghdr *)NLMSG_DATA(nlmsg);
     nla = (struct nlattr *)((char *)gnlhdr + GENL_HDRLEN);
 
-    for ()
+    /* here should be for loop for parsing attributes, to find family id */
     if (nla->nla_type == CTRL_ATTR_FAMILY_ID) {
+        /* TODO: wrap nla-related data access into a macro */
         gnl_fam = *(uint16_t *)((char *)nla + NLA_HDRLEN);
         printf("Family: %hu\n", gnl_fam);
     }
