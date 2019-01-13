@@ -3,8 +3,8 @@
 
 #include <net/netlink.h>
 #include <net/genetlink.h>
-/*#include "nlmod_common.h"*/
-
+#include "nlmod_common.h"
+/*
 enum nlmod_attr_type {
     NLMODULE_UNDEF,
     NLMODULE_STR,
@@ -28,9 +28,11 @@ struct nlmod_hdr {
         __u32 hdr;
     };
 };
+#define NLMODULE_HDR_SIZE sizeof(struct nlmod_hdr)
 
 #define NLMOD_CUSTOM_NAME "NLMOD CUSTOM"
 #define NLMODULE_MAX (__NLMODULE_MAX - 1)
-#define NLMODULE_HDR_SIZE sizeof(struct nlmod_hdr)
+*/
+
 
 #endif /* __NLMODULE_H__ */

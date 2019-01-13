@@ -1,0 +1,7 @@
+SRC=/home/drunksandman1984/D/Documents/sandbox/netlink/module
+
+obj-m := mod.o
+mod-y := src/nlmod.o
+
+ccflags-y := -I$(SRC)/include
+ccflags-y += -I$(SRC)/../common
