@@ -34,33 +34,33 @@ struct nl_msg {
 
 void hexdump(const unsigned char *data, size_t size)
 {
-	const static int max_bytes_per_line = 16;
-	int i = 0;
+    const static int max_bytes_per_line = 16;
+    int i = 0;
 
     printf("------- start dump, len=%lu -------\n", size);
-	while (i < size) {
-		int cur_line = max_bytes_per_line;
-		int hex = i, ascii = hex;
+    while (i < size) {
+        int cur_line = max_bytes_per_line;
+        int hex = i, ascii = hex;
 
-		for (; i < size && cur_line > 0; i++, cur_line--) {
-			printf("%.2X ", data[hex++]);
+        for (; i < size && cur_line > 0; i++, cur_line--) {
+            printf("%.2X ", data[hex++]);
             /* additional spacing between bytes in a line */
-			if ((cur_line - 1) == max_bytes_per_line / 2)
-				printf("  ");
-		}
+            if ((cur_line - 1) == max_bytes_per_line / 2)
+                printf("  ");
+        }
         /* spacing between bytes possibly haven't been printed' */
-		if (cur_line > 9)
-			printf("  ");
+        if (cur_line > 9)
+            printf("  ");
 
         /* missing bytes in hex line */
-		while (cur_line-- > 0)
-			printf("   ");
-		printf("| ");
+        while (cur_line-- > 0)
+            printf("   ");
+        printf("| ");
 
-		for (; ascii != hex; ascii++)
-			printf("%c ", isprint(data[ascii])? data[ascii] : '.');
-		printf("\n");
-	}
+        for (; ascii != hex; ascii++)
+            printf("%c ", isprint(data[ascii])? data[ascii] : '.');
+        printf("\n");
+    }
     printf("------- end dump -------\n");
 }
 
@@ -144,7 +144,7 @@ int get_gnl_fam(int gnl_sock)
     /*for (nla = GENLMSG_DATA(); nla && data_left; nla = NLA_NEXT(nla)) {
 
     }*/
-	if (nlmsg->nlhdr.nlmsg_type == NLMSG_ERROR || (ret < 0) 
+    if (nlmsg->nlhdr.nlmsg_type == NLMSG_ERROR || (ret < 0) 
             || !NLMSG_OK(&(nlmsg->nlhdr), ret)) {
         printf("E R R O R\n");
         goto failure;
