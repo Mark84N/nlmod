@@ -8,6 +8,7 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <ctype.h>
 
 #include "nlmod_common.h"
 
@@ -15,39 +16,52 @@ static struct common {
     unsigned long seq;
 } common;
 
+#define GENLMSG_DATA(msg) \
+        ((char *)(msg) + NLMSG_ALIGN(NLMSG_HDRLEN + GENL_HDRLEN))
+#define NLA_NEXT(nla) \
+        (struct nlattr *)((char *)(nla) + NLA_ALIGN(nla->nla_len))
+#define NLA_DATA(nla) \
+        ((char *)(nla) + NLA_HDRLEN)
+#define NLA_PRESENT(nlmsg) 1
+
+#define NLMSG_FOR_EACH_ATTR(nlmsg) 1
+
 struct nl_msg {
     struct nlmsghdr nlhdr;
     struct genlmsghdr gnlhdr;
     uint8_t payload[2048];
 };
 
-void DumpHex(const void* data, size_t size) {
-	char ascii[17];
-	size_t i, j;
-	ascii[16] = '\0';
-	for (i = 0; i < size; ++i) {
-		printf("%02X ", ((unsigned char*)data)[i]);
-		if (((unsigned char*)data)[i] >= ' ' && ((unsigned char*)data)[i] <= '~') {
-			ascii[i % 16] = ((unsigned char*)data)[i];
-		} else {
-			ascii[i % 16] = '.';
+void hexdump(const unsigned char *data, size_t size)
+{
+	const static int max_bytes_per_line = 16;
+	int i = 0;
+
+    printf("------- start dump, len=%lu -------\n", size);
+	while (i < size) {
+		int cur_line = max_bytes_per_line;
+		int hex = i, ascii = hex;
+
+		for (; i < size && cur_line > 0; i++, cur_line--) {
+			printf("%.2X ", data[hex++]);
+            /* additional spacing between bytes in a line */
+			if ((cur_line - 1) == max_bytes_per_line / 2)
+				printf("  ");
 		}
-		if ((i+1) % 8 == 0 || i+1 == size) {
-			printf(" ");
-			if ((i+1) % 16 == 0) {
-				printf("|  %s \n", ascii);
-			} else if (i+1 == size) {
-				ascii[(i+1) % 16] = '\0';
-				if ((i+1) % 16 <= 8) {
-					printf(" ");
-				}
-				for (j = (i+1) % 16; j < 16; ++j) {
-					printf("   ");
-				}
-				printf("|  %s \n", ascii);
-			}
-		}
+        /* spacing between bytes possibly haven't been printed' */
+		if (cur_line > 9)
+			printf("  ");
+
+        /* missing bytes in hex line */
+		while (cur_line-- > 0)
+			printf("   ");
+		printf("| ");
+
+		for (; ascii != hex; ascii++)
+			printf("%c ", isprint(data[ascii])? data[ascii] : '.');
+		printf("\n");
 	}
+    printf("------- end dump -------\n");
 }
 
 int get_gnl_fam(int gnl_sock)
@@ -103,7 +117,7 @@ int get_gnl_fam(int gnl_sock)
     msg.msg_iov = &iov;
     msg.msg_iovlen = 1;
 
-    DumpHex(nlmsg, total_len);
+    hexdump(nlmsg, total_len);
 
     /*send*/
     if ((ret = sendmsg(gnl_sock, &msg, 0)) == -1) {
@@ -119,8 +133,17 @@ int get_gnl_fam(int gnl_sock)
         goto failure;
 
     printf("Received %d bytes!\n", ret);
-    DumpHex(nlmsg, ret);
+    hexdump(nlmsg, ret);
 
+    /*
+    *  Received msg layout:
+    *  +------------------------------------------------------------------+
+    *  | NLMSGHDR | PAD | GENLMSGHDR | PAD | NLA_HDR | NLA_DATA | PAD | ...
+    *  +------------------------------------------------------------------+
+    */
+    /*for (nla = GENLMSG_DATA(); nla && data_left; nla = NLA_NEXT(nla)) {
+
+    }*/
 	if (nlmsg->nlhdr.nlmsg_type == NLMSG_ERROR || (ret < 0) 
             || !NLMSG_OK(&(nlmsg->nlhdr), ret)) {
         printf("E R R O R\n");
