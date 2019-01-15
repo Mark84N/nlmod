@@ -1,6 +1,6 @@
 SRC=src/*
 
-CFLAGS=-I../common
+CFLAGS=-I../common -Iinclude
 
 all:
 	gcc -o gnl-app $(SRC) $(CFLAGS)
