@@ -3,7 +3,6 @@
 #include <linux/init.h>
 #include <linux/slab.h>
 #include <linux/list.h>
-
 #include <linux/genetlink.h>
 
 #include "nlmod_private.h"

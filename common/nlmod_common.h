@@ -1,9 +1,6 @@
 #ifndef __NLMOD_COMMON__
 #define __NLMOD_COMMON__
 
-//#include <stdint.h>
-//#include <linux/types.h>
-
 enum nlmod_attr_type {
     NLMODULE_UNDEF,
     NLMODULE_STR,
