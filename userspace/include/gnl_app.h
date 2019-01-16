@@ -40,7 +40,8 @@ struct nl_msg {
     uint8_t payload[2048];
 };
 
-int create_gnl_sock(void);
-int get_gnl_fam(int gnl_sock);
+int gnl_create_sock(void);
+int gnl_get_fam(int gnl_sock);
+int gnl_test_cmd(int gnl_sock);
 
 #endif /* __GNL_APP_H__ */
