@@ -66,13 +66,14 @@ int get_gnl_fam(int gnl_sock)
 
     total_len = NLMSG_ALIGN(NLMSG_HDRLEN + GENL_HDRLEN);
 
-    nlmsg->nlhdr.nlmsg_type = GENL_ID_CTRL;
-    nlmsg->nlhdr.nlmsg_seq = common.seq++;
-    nlmsg->nlhdr.nlmsg_flags = NLM_F_REQUEST;
-    nlmsg->nlhdr.nlmsg_pid = getpid();
+    nlhdr = &nlmsg->nlhdr;
+    nlhdr->nlmsg_type = GENL_ID_CTRL;
+    nlhdr->nlmsg_seq = common.seq++;
+    nlhdr->nlmsg_flags = NLM_F_REQUEST;
+    nlhdr->nlmsg_pid = getpid();
     nlmsg->gnlhdr.cmd = CTRL_CMD_GETFAMILY;
 
-    nla = (struct nlattr *)GENLMSG_DATA(&(nlmsg->nlhdr));
+    nla = (struct nlattr *)GENLMSG_DATA(nlhdr);
     nla->nla_type = CTRL_ATTR_FAMILY_NAME;
     nla_data_len =  strlen(NLMOD_CUSTOM_NAME) + 1;
     nla->nla_len = NLA_HDRLEN + nla_data_len;
@@ -81,7 +82,7 @@ int get_gnl_fam(int gnl_sock)
                 sizeof(struct nl_msg) - (total_len + NLA_HDRLEN));
 
     total_len += NLMSG_ALIGN(NLA_HDRLEN + nla_data_len);
-    nlmsg->nlhdr.nlmsg_len = total_len;
+    nlhdr->nlmsg_len = total_len;
 
     memset(&nl_addr, 0, sizeof(struct sockaddr_nl));
     nl_addr.nl_family = AF_NETLINK;
@@ -117,11 +118,8 @@ int get_gnl_fam(int gnl_sock)
     printf("Received %d bytes!\n", ret);
     hexdump((unsigned char *)nlmsg, ret);
 
-    if (nlmsg->nlhdr.nlmsg_type == NLMSG_ERROR || (ret < 0) 
-            || !NLMSG_OK(&(nlmsg->nlhdr), ret)) {
-        printf("E R R O R\n");
+    if (nlhdr->nlmsg_type == NLMSG_ERROR || !NLMSG_OK(nlhdr, ret))
         goto failure;
-    }
     /*
     *  Received msg layout:
     *  +------------------------------------------------------------------+
@@ -129,9 +127,9 @@ int get_gnl_fam(int gnl_sock)
     *  +------------------------------------------------------------------+
     */
 
-    nla = (struct nlattr *)GENLMSG_DATA(&(nlmsg->nlhdr));
-    nla_for_each_attr(nla, genlmsg_data_len(&(nlmsg->nlhdr)), remain) {
-        static int count = 0;
+    nla = (struct nlattr *)GENLMSG_DATA(nlhdr);
+    nla_for_each_attr(nla, genlmsg_data_len(nlhdr), remain) {
+        static int count = 1;
         printf("Attribute #%d\n", count++);
         if (nla->nla_type == CTRL_ATTR_FAMILY_ID) {
             gnl_fam = *(uint16_t *)((char *)nla + NLA_HDRLEN);
@@ -139,9 +137,6 @@ int get_gnl_fam(int gnl_sock)
         }
     }
 
-    free(nlmsg);
-
-    return gnl_fam;
 failure:
     if (nlmsg)
         free(nlmsg);
