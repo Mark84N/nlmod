@@ -18,13 +18,13 @@ struct nla_policy nlmod_nla_policy[NLMODULE_MAX + 1] = {
 
 static struct genl_family nlmod_family = {
     .id = GENL_ID_GENERATE,
-    .hdrsize = 0,//NLMODULE_HDR_SIZE,
+    .hdrsize = 0,
     .name = NLMOD_CUSTOM_NAME,
     .version = 0.1,
     .maxattr = NLMODULE_MAX,
 };
 
-static char nlmod_buf[255] = "xui";
+static char nlmod_buf[255] = "Hello";
 static int nlmod_int;
 
 static int nlmod_get_str(struct sk_buff *skb, struct genl_info *info)
@@ -33,7 +33,6 @@ static int nlmod_get_str(struct sk_buff *skb, struct genl_info *info)
     void *hdr;
 
     pr_crit("%s() - event received; text=%s\n", __func__, nlmod_buf);
-
     msg = nlmsg_new(NLMSG_GOODSIZE, GFP_KERNEL);
     if (!msg)
         return -ENOMEM;

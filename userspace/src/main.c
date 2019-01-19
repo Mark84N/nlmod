@@ -16,7 +16,7 @@ int main(int argc, char **argv)
 
     printf("Success: family#%d\n", gnl_fam);
 
-    if (gnl_test_cmd(gnl_sock) < 0)
+    if (gnl_test_cmd(gnl_sock, gnl_fam) < 0)
         goto out;
 
     ret = 0;

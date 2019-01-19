@@ -42,6 +42,6 @@ struct nl_msg {
 
 int gnl_create_sock(void);
 int gnl_get_fam(int gnl_sock);
-int gnl_test_cmd(int gnl_sock);
+int gnl_test_cmd(int gnl_sock, int family);
 
 #endif /* __GNL_APP_H__ */
