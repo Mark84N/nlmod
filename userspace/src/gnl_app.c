@@ -69,6 +69,46 @@ struct gnl_msg_cfg {
     int iov_len;
 };
 
+#define NLA_TYPE_OK(nla) \
+    (((nla)->nla_type > NLMODULE_UNDEF) && \
+    ((nla)->nla_type < __NLMODULE_MAX))
+
+/*
+    @gnl_parse_attr() - Parse a stream of atrributes from the nlmsg to attrtbl.
+    @nlh: Pointer to a nlmsghdr received.
+    @attrtbl: Pointer to an array of pointers to nlattr with len=(sizeof(nlattr) * maxattr).
+
+    Return: number of attributes parsed or -1 on error.
+*/
+static int gnl_parse_attr(struct nlmsghdr *nlh, struct nlattr **attrtbl)
+{
+    struct nlattr *nla;
+    int ret = -1;
+    int attrcount = 0;
+    int remain = 0;
+
+    /* should never happen */
+    if (!nlh || !attrtbl)
+        return -1;
+
+    memset(attrtbl, 0, sizeof(struct nlattr *) * __NLMODULE_MAX);
+    nla = (struct nlattr *)GENLMSG_DATA(nlh);
+
+    nla_for_each_attr(nla, genlmsg_data_len(nlh), remain) {
+        if (nla && NLA_TYPE_OK(nla)) {
+            attrcount++;
+            /* TODO: maybe some additional validation? */
+            attrtbl[nla->nla_type] = nla;
+        }
+    }
+    ret = attrcount;
+
+    if (remain)
+        printf("Error! Something left=%d after parsing attributes.\n", remain);
+fail:
+    return ret;
+}
+
 static int gnl_send_msg(int gnl_sock, struct gnl_msg_cfg *cfg)
 {
     struct sockaddr_nl nl_addr;
@@ -142,12 +182,12 @@ static int gnl_send_msg(int gnl_sock, struct gnl_msg_cfg *cfg)
         printf("error: %d, try#%d\n", errno, retry);
         usleep(250 * 1000); // 250 ms
         if (retry++ >= 5)
-            goto failure;
+            goto fail;
     }
 
     printf("Sent %d bytes!, family requested: \"%s\"\n", ret, NLMOD_CUSTOM_NAME);
 
-failure:
+fail:
     if (nlmsg)
         free(nlmsg);
 
@@ -188,14 +228,14 @@ int gnl_get_fam(int gnl_sock)
         return ENOMEM;
 
     if ((ret = recv(gnl_sock, nlmsg, sizeof(struct nl_msg), 0)) == -1)
-        goto failure;
+        goto fail;
 
     printf("Received %d bytes!\n", ret);
     hexdump((unsigned char *)nlmsg, ret);
 
     nlhdr = &nlmsg->nlhdr;
     if (nlhdr->nlmsg_type == NLMSG_ERROR || !NLMSG_OK(nlhdr, ret))
-        goto failure;
+        goto fail;
     /*
     *  Received msg layout:
     *  +------------------------------------------------------------------+
@@ -214,7 +254,7 @@ int gnl_get_fam(int gnl_sock)
         }
     }
 
-failure:
+fail:
     if (nlmsg)
         free(nlmsg);
     return gnl_fam;
@@ -233,11 +273,11 @@ int gnl_create_sock(void)
     nl_addr.nl_pid = getpid();
 
     if (bind(sockd, (struct sockaddr *)&nl_addr, sizeof(struct sockaddr_nl)) < 0)
-        goto failure;
+        goto fail;
 
     return sockd;
 
-failure:
+fail:
     if (sockd != -1)
         close(sockd);
     return -1;
@@ -250,6 +290,7 @@ int gnl_test_cmd(int gnl_sock, int family)
     struct nlattr *nla;
     struct iovec iov;
     struct gnl_attr gnl_attr;
+    struct nlattr *attrtbl[__NLMODULE_MAX];
     struct gnl_msg_cfg cfg = {
         .nlmsg_type = family,
         .nlmsg_flags = NLM_F_REQUEST,
@@ -257,7 +298,7 @@ int gnl_test_cmd(int gnl_sock, int family)
         .iov = &iov,
         .iov_len = 1,
     };
-    int ret = 0, remain = 0;
+    int ret = 0;
     const char *str;
 
     gnl_attr.type = CTRL_ATTR_FAMILY_NAME;
@@ -276,27 +317,38 @@ int gnl_test_cmd(int gnl_sock, int family)
         return ENOMEM;
 
     if ((ret = recv(gnl_sock, nlmsg, sizeof(struct nl_msg), 0)) == -1)
-        goto failure;
+        goto fail;
 
     printf("Received %d bytes!\n", ret);
     hexdump((unsigned char *)nlmsg, ret);
 
     nlhdr = &nlmsg->nlhdr;
     if (nlhdr->nlmsg_type == NLMSG_ERROR || !NLMSG_OK(nlhdr, ret))
-        goto failure;
+        goto fail;
 
-    nla = (struct nlattr *)GENLMSG_DATA(nlhdr);
+    if ((ret = gnl_parse_attr(nlhdr, attrtbl)) <= 0)
+        goto fail;
+
+    if (attrtbl[NLMODULE_STR]) {
+        nla = attrtbl[NLMODULE_STR];
+        str = (const char *)((char *)nla + NLA_HDRLEN);
+        printf("Received: %s\n", str);
+    } else if (attrtbl[NLMODULE_U32]) {
+        ;
+    }
+
+    /*nla = (struct nlattr *)GENLMSG_DATA(nlhdr);
     nla_for_each_attr(nla, genlmsg_data_len(nlhdr), remain) {
         static int count = 1;
         printf("Attribute #%d\n", count++);
-        if (nla->nla_type == CTRL_ATTR_FAMILY_ID) {
+        if (nla->nla_type == NLMODULE_STR) {
             str = (const char *)((char *)nla + NLA_HDRLEN);
             printf("Received: %s\n", str);
             break;
         }
-    }
+    }*/
 
-failure:
+fail:
     if (nlmsg)
         free(nlmsg);
 
