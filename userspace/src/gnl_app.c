@@ -295,13 +295,12 @@ int gnl_test_cmd(int gnl_sock, int family)
         .iov_len = 0,
     };
     int ret = -1;
-    const char *str;
 
     gnl_send_msg(gnl_sock, &cfg);
 
     /* prepare to receive */
     nlmsg = calloc(1, sizeof(struct nl_msg));
-    if (!nlmsg )
+    if (!nlmsg)
         return ENOMEM;
 
     if ((ret = recv(gnl_sock, nlmsg, sizeof(struct nl_msg), 0)) == -1)
@@ -318,8 +317,7 @@ int gnl_test_cmd(int gnl_sock, int family)
 
     if (attrtbl[NLMODULE_STR]) {
         nla = attrtbl[NLMODULE_STR];
-        str = (const char *)nla_data(nla);
-        printf("Received: %s\n", str);
+        printf("Received: %s\n", (const char *)nla_data(nla));
     } else if (attrtbl[NLMODULE_U32]) {
         ;
     }
