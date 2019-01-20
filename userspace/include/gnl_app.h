@@ -5,10 +5,16 @@
 #include <linux/genetlink.h>
 #include <stdint.h>
 
+#include "nlmod_common.h"
+
+/* get pointer to  */
 #define GENLMSG_DATA(nlmsg) \
         ((unsigned char *)(nlmsg) + NLMSG_ALIGN(NLMSG_HDRLEN + GENL_HDRLEN))
-#define NLA_DATA(nla) \
-        ((char *)(nla) + NLA_HDRLEN)
+
+static inline uint8_t *nla_data(struct nlattr *nla)
+{
+    return ((char *)(nla) + NLA_HDRLEN);
+}
 
 static inline int genlmsg_data_len(const struct nlmsghdr *nh)
 {
@@ -20,6 +26,12 @@ static inline int nla_ok(const struct nlattr *nla, int remaining)
     return remaining >= (int) sizeof(*nla) &&
         nla->nla_len >= sizeof(*nla) &&
         nla->nla_len <= remaining;
+}
+
+static inline int nla_type_ok(struct nlattr *nla)
+{
+    return (((nla)->nla_type > NLMODULE_UNDEF) && \
+    ((nla)->nla_type < __NLMODULE_MAX));
 }
 
 static inline struct nlattr *nla_next(struct nlattr *nla, int *remaining)
