@@ -46,30 +46,6 @@ void hexdump(const unsigned char *data, size_t size)
 }
 
 /*
-    Attributes are kept in iov member of cfg
-    to be appended then to the msg.
-*/
-struct gnl_attr {
-  int type;
-  int len;
-  void *data;
-};
-
-/*
-    An attempt of generalizing sending API.
-    Probably ugly, yet functional.
-*/
-struct gnl_msg_cfg {
-    int nlmsg_type;
-    int nlmsg_flags;
-    int gnl_cmd;
-    /* a pointer to the array of iov, each of which holds gnl_attr */
-    struct iovec *iov;
-    /* qty of iov strutures pointed by iov * above */
-    int iov_len;
-};
-
-/*
     @gnl_parse_attr() - Parse a stream of atrributes from the nlmsg to attrtbl.
     @nlh: Pointer to a nlmsghdr received.
     @attrtbl: Pointer to an array of pointers to nlattr with len=(sizeof(nlattr) * maxattr).
@@ -104,6 +80,25 @@ fail:
     return ret;
 }
 
+/*
+    gnl_send_msg() - Based on a cfg, compose & send generic NL msg.
+    @gnl_sock: Generic NL socket descriptor.
+    @cfg: Pointer to a message config (see below).
+
+    Return: 0 on success or errno.
+
+    Description: struct gnl_msg_cfg is used to generalize the API of
+    message sending. It takes most used parameters:
+    *nlmsg_type: type of message (i.e. family);
+    *nlmsg_flags: message flags;
+    *gnl_cmd: type of family-specific command;
+    *iov: pointer to an array of struct iovec;
+    *iov_len: iov elements in aray;
+
+    Each struct iov * is used as a carrier for attribute info (struct gnl_attr).
+
+    struct gnl_attr describes attributes in a TLV-manner.
+*/
 static int gnl_send_msg(int gnl_sock, struct gnl_msg_cfg *cfg)
 {
     struct sockaddr_nl nl_addr;
@@ -186,6 +181,12 @@ fail:
     return ret;
 }
 
+/*
+    gnl_get_fam() - Get id of a custom NL family by the name.
+    @gnl_sock: Generic NL socket descriptor.
+
+    Return: Family id or -1 on error.
+*/
 int gnl_get_fam(int gnl_sock)
 {
     struct nl_msg *nlmsg;
@@ -233,14 +234,10 @@ int gnl_get_fam(int gnl_sock)
     *  | NLMSGHDR | PAD | GENLMSGHDR | PAD | NLA_HDR | NLA_DATA | PAD | ...
     *  +------------------------------------------------------------------+
     */
-
     nla = (struct nlattr *)GENLMSG_DATA(nlhdr);
     nla_for_each_attr(nla, genlmsg_data_len(nlhdr), remain) {
-        static int count = 1;
-        printf("Attribute #%d\n", count++);
         if (nla->nla_type == CTRL_ATTR_FAMILY_ID) {
             gnl_fam = *(uint16_t *)nla_data(nla);
-            printf("Family: %hu\n", gnl_fam);
             break;
         }
     }
@@ -251,6 +248,10 @@ fail:
     return gnl_fam;
 }
 
+/*
+    gnl_create_sock() - Create + bind a generic NL socket.
+    Return: Socket descriptor or -1 on error.
+*/
 int gnl_create_sock(void)
 {
     int sockd;
