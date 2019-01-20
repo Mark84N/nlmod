@@ -37,7 +37,7 @@ static inline struct nlattr *nla_next(struct nlattr *nla, int *remaining)
 struct nl_msg {
     struct nlmsghdr nlhdr;
     struct genlmsghdr gnlhdr;
-    uint8_t payload[2048];
+    uint8_t payload[4096];
 };
 
 int gnl_create_sock(void);
