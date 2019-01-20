@@ -212,7 +212,6 @@ int gnl_get_fam(int gnl_sock)
     iov.iov_base = &gnl_attr;
     iov.iov_len = sizeof(struct gnl_attr);
 
-    /* send */
     gnl_send_msg(gnl_sock, &cfg);
 
     /* prepare to receive */
