@@ -88,14 +88,12 @@ fail:
     Return: 0 on success or errno.
 
     Description: struct gnl_msg_cfg is used to generalize the API of
-    message sending. It takes most used parameters:
+    sending messages. It takes most common parameters:
     *nlmsg_type: type of message (i.e. family);
     *nlmsg_flags: message flags;
     *gnl_cmd: type of family-specific command;
-    *iov: pointer to an array of struct iovec;
-    *iov_len: iov elements in aray;
-
-    Each struct iov * is used as a carrier for attribute info (struct gnl_attr).
+    *gnlattr: pointer to an array of struct gnl_attr *;
+    *attrcount: attributes in the aray;
 
     struct gnl_attr describes attributes in a TLV-manner.
 */
@@ -106,6 +104,7 @@ static int gnl_send_msg(int gnl_sock, struct gnl_msg_cfg *cfg)
     struct msghdr msg;
     struct nlmsghdr *nlhdr;
     struct nlattr *nla;
+    struct gnl_attr *gnl_attr;
     struct nl_msg *nlmsg;
     int total_len = 0;
     int ret = 0;
@@ -123,13 +122,12 @@ static int gnl_send_msg(int gnl_sock, struct gnl_msg_cfg *cfg)
     nlhdr->nlmsg_pid = getpid();
     nlmsg->gnlhdr.cmd = cfg->gnl_cmd;
 
-    /* nla start */
+    /* start location to write attributes */
     nla = (struct nlattr *)GENLMSG_DATA(nlhdr);
+    gnl_attr = cfg->gnlattr;
 
-    /* add the attributes from the config to the msg */
-    for (int i = 0; i < cfg->iov_len; i++) {
-        struct iovec *iov = cfg->iov;
-        struct gnl_attr *gnl_attr = (struct gnl_attr *)iov->iov_base;
+    /* append attributes to the nlmsg */
+    for (int i = 0; i < cfg->attrcount && gnl_attr; i++) {
         int nla_data_len = gnl_attr->len;
         int nla_total_len =  NLMSG_ALIGN(NLA_HDRLEN + nla_data_len);
         int remain = sizeof(struct nl_msg) - total_len;
@@ -145,9 +143,9 @@ static int gnl_send_msg(int gnl_sock, struct gnl_msg_cfg *cfg)
 
         printf("Debug: attr #%d - added %d bytes to a msg\n",
                     i, nla_total_len);
-        /* advance to the next attr */
+        /* move ptr to write the next attribute */
         nla = (struct nlattr *)((char *)nla + nla_total_len);
-        iov++;
+        gnl_attr++;
     }
 
     nlhdr->nlmsg_len = total_len;
@@ -192,14 +190,13 @@ int gnl_get_fam(int gnl_sock)
     struct nl_msg *nlmsg;
     struct nlmsghdr *nlhdr;
     struct nlattr *nla;
-    struct iovec iov;
     struct gnl_attr gnl_attr;
     struct gnl_msg_cfg cfg = {
         .nlmsg_type = GENL_ID_CTRL,
         .nlmsg_flags = NLM_F_REQUEST,
         .gnl_cmd = CTRL_CMD_GETFAMILY,
-        .iov = &iov,
-        .iov_len = 1,
+        .gnlattr = &gnl_attr,
+        .attrcount = 1,
     };
     int gnl_fam = -1;
     int remain;
@@ -208,9 +205,6 @@ int gnl_get_fam(int gnl_sock)
     gnl_attr.type = CTRL_ATTR_FAMILY_NAME;
     gnl_attr.len = strlen(NLMOD_CUSTOM_NAME) + 1;
     gnl_attr.data = NLMOD_CUSTOM_NAME;
-
-    iov.iov_base = &gnl_attr;
-    iov.iov_len = sizeof(struct gnl_attr);
 
     gnl_send_msg(gnl_sock, &cfg);
 
@@ -291,8 +285,8 @@ int gnl_test_cmd(int gnl_sock, int family)
         .nlmsg_type = family,
         .nlmsg_flags = NLM_F_REQUEST,
         .gnl_cmd = NLMODULE_GET_STR,
-        .iov = NULL,
-        .iov_len = 0,
+        .gnlattr = NULL,
+        .attrcount = 0,
     };
     int ret = -1;
 
