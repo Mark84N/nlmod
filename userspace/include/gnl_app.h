@@ -14,8 +14,9 @@ struct nl_msg {
 };
 
 /*
-    Attributes are kept in iov member of cfg
-    to be appended then to the msg.
+    Basically it is a nlattr-wrapper presented in a TLV-manner.
+    It is done for convenient appending of the attributes to nlmsg.
+    An array of gnl_attr is kept inside msg config.
 */
 struct gnl_attr {
   int type;
@@ -25,16 +26,17 @@ struct gnl_attr {
 
 /*
     An attempt of generalizing sending API.
-    Probably ugly, yet functional.
+    Probably ugly, yet functional. Used to pass the most
+    useful and common parameters for nlmsg construction.
 */
 struct gnl_msg_cfg {
     int nlmsg_type;
     int nlmsg_flags;
     int gnl_cmd;
-    /* a pointer to the array of iov, each of which holds gnl_attr */
-    struct iovec *iov;
-    /* qty of iov strutures pointed by iov * above */
-    int iov_len;
+    /* pointer to an array of attributes */
+    struct gnl_attr *gnlattr;
+    /* count of attributes in an array */
+    int attrcount;
 };
 
 #define GENLMSG_DATA(nlmsg) \
