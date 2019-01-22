@@ -14,84 +14,94 @@ static struct gnl_data {
     unsigned long seq;
 } gnl_data = { .seq = 1, };
 
+typedef enum {
+    DEBUG_NO = 0, /* no output */
+    DEBUG_INFO, /* general debug info, errors */
+    DEBUG_VERBOSE, /* additional debug info */
+    DEBUG_EXCESSIVE, /* all debug + dumping messages */
+} dbglvl_t;
+
+dbglvl_t dbglvl = DEBUG_VERBOSE;
+
+#define debug(lvl, fmt, ...)    \
+        if (dbglvl >= lvl) {    \
+            printf("["#lvl"] " fmt, ##__VA_ARGS__);           \
+        }
+
 void hexdump(const unsigned char *data, size_t size)
 {
     const static int max_bytes_per_line = 16;
     int i = 0;
 
-    printf("------- start dump, len=%lu -------\n", size);
+    debug(DEBUG_EXCESSIVE, "------- start dump, len=%lu -------\n", size);
     while (i < size) {
         int cur_line = max_bytes_per_line;
         int hex = i, ascii = hex;
 
         for (; i < size && cur_line > 0; i++, cur_line--) {
-            printf("%.2X ", data[hex++]);
+            debug(DEBUG_EXCESSIVE, "%.2X ", data[hex++]);
             /* additional spacing between bytes in a line */
             if ((cur_line - 1) == max_bytes_per_line / 2)
-                printf("  ");
+                debug(DEBUG_EXCESSIVE, "  ");
         }
         /* spacing between bytes possibly haven't been printed' */
         if (cur_line > 9)
-            printf("  ");
+            debug(DEBUG_EXCESSIVE, "  ");
 
         /* missing bytes in hex line */
         while (cur_line-- > 0)
-            printf("   ");
-        printf("| ");
+            debug(DEBUG_EXCESSIVE, "   ");
+        debug(DEBUG_EXCESSIVE, "| ");
 
         for (; ascii != hex; ascii++)
-            printf("%c ", isprint(data[ascii])? data[ascii] : '.');
-        printf("\n");
+            debug(DEBUG_EXCESSIVE, "%c ", isprint(data[ascii])? data[ascii] : '.');
+        debug(DEBUG_EXCESSIVE, "\n");
     }
 }
 
 /*
     @gnl_parse_attr() - Parse a stream of atrributes from the nlmsg to attrtbl.
     @nlh: Pointer to a nlmsghdr received.
-    @attrtbl: Pointer to an array of pointers to nlattr with len=(sizeof(nlattr) * maxattr).
+    @attrtbl: Pointer to array of struct nlattr *, array len=__NLMODULE_MAX.
 
     Return: Number of attributes parsed or -1 on error.
 */
 static int gnl_parse_attr(struct nlmsghdr *nlh, struct nlattr **attrtbl)
 {
-    struct nlattr *nla;
+    struct nlattr *nla = (struct nlattr *)genlmsg_data(nlh);
     int attrcount = 0, remain = 0;
-    int ret = -1;
 
-    /* should never happen */
-    if (!nlh || !attrtbl)
-        return -1;
-
-    nla = (struct nlattr *)genlmsg_data(nlh);
     nla_for_each_attr(nla, genlmsg_data_len(nlh), remain) {
-        if (nla && nla_type_ok(nla)) {
+        if (nla_type_ok(nla)) {
             attrcount++;
             /* TODO: maybe some additional validation? */
             attrtbl[nla->nla_type] = nla;
+        } else {
+            debug(DEBUG_INFO, "Unknown attribute! attrtype=%hx, attrlen=%hu\n",
+                        nla->nla_type, nla->nla_len);
         }
     }
-    ret = attrcount;
 
     if (remain)
-        printf("Error! Something left=%d after parsing attributes.\n", remain);
-fail:
-    return ret;
+        debug(DEBUG_INFO, "Unknown trailing data len=%d in the message.\n", remain);
+
+    return attrcount;
 }
 
 /*
     gnl_send_msg() - Based on a cfg, compose & send generic NL msg.
     @gnl_sock: Generic NL socket descriptor.
-    @cfg: Pointer to a message config (see below).
+    @cfg: Pointer to a config (see below).
 
-    Return: 0 on success or errno.
+    Return: 0 on success, -1 on error.
 
-    Description: struct gnl_msg_cfg is used to generalize the API of
-    sending messages. It takes most common parameters:
-    *nlmsg_type: type of message (i.e. family);
-    *nlmsg_flags: message flags;
-    *gnl_cmd: type of family-specific command;
-    *gnlattr: pointer to an array of struct gnl_attr *;
-    *attrcount: attributes in the aray;
+    Description: struct gnl_msg_cfg is used to generalize message sending API.
+    Its fields are the most commonly used and/or required parameters:
+    - nlmsg_type: type of message (i.e. family);
+    - nlmsg_flags: message flags;
+    - gnl_cmd: type of family-specific command;
+    - gnlattr: pointer to the array of struct gnl_attr *;
+    - attrcount: qty of the attributes in the aray;
 
     struct gnl_attr describes attributes in a TLV-manner.
 */
@@ -104,14 +114,13 @@ static int gnl_send_msg(int gnl_sock, struct gnl_msg_cfg *cfg)
     struct nlattr *nla;
     struct gnl_attr *gnl_attr;
     struct nl_msg *nlmsg;
-    int total_len = 0;
-    int ret = 0;
+    int total_len = NLMSG_ALIGN(NLMSG_HDRLEN + GENL_HDRLEN), ret = 0;
 
     nlmsg = calloc(1, sizeof(struct nl_msg));
-    if (!nlmsg )
-        return ENOMEM;
-
-    total_len = NLMSG_ALIGN(NLMSG_HDRLEN + GENL_HDRLEN);
+    if (!nlmsg) {
+        debug(DEBUG_INFO, "Error: \"%s\".", strerror(errno));
+        return -1;
+    }
 
     nlhdr = &nlmsg->nlhdr;
     nlhdr->nlmsg_type = cfg->nlmsg_type;
@@ -130,17 +139,19 @@ static int gnl_send_msg(int gnl_sock, struct gnl_msg_cfg *cfg)
         int nla_total_len =  NLMSG_ALIGN(NLA_HDRLEN + nla_data_len);
         int remain = sizeof(struct nl_msg) - total_len;
 
-        if (remain < nla_total_len)
+        if (remain < nla_total_len) {
+            debug(DEBUG_INFO, "Warning! Attribute #%d: attrtype=%hx, attrlen=%hu exceeds message"
+                    " length and was ignored.\n", i, gnl_attr->type, gnl_attr->len);
             break;
+        }
 
         total_len += nla_total_len;
         nla->nla_type = gnl_attr->type;
         nla->nla_len = NLA_HDRLEN + nla_data_len;
-        /* copy nla payload */
         memcpy(nla_data(nla), gnl_attr->data, nla_data_len);
 
-        printf("Debug: attr #%d - added %d bytes to a msg\n",
-                    i, nla_total_len);
+        debug(DEBUG_VERBOSE, "Attribute #%d: attrtype=%hx, attrlen=%hu was appended.\n",
+                    i, gnl_attr->type, gnl_attr->len);
         /* move ptr to write the next attribute */
         nla = (struct nlattr *)((char *)nla + nla_total_len);
         gnl_attr++;
@@ -165,25 +176,33 @@ static int gnl_send_msg(int gnl_sock, struct gnl_msg_cfg *cfg)
 
     while ((ret = sendmsg(gnl_sock, &msg, 0)) == -1) {
         static int retry = 0;
-        usleep(250 * 1000); // 250 ms
-        if (retry++ >= 5)
-            goto fail;
+        int err = errno;
+        debug(DEBUG_VERBOSE, "Failed to send message. Attempt=%d, errno=%d, "
+                        "description=\"%s\". Re-try in 250 msec.\n",
+                        retry + 1, err, strerror(err));
+        usleep(250 * 1000); // 250 msec
+        if (retry++ >= 5) {
+            debug(DEBUG_VERBOSE, "Retry count exceeded.\n")
+            break;
+        }
     }
 
-fail:
+    if (ret > 0)
+        debug(DEBUG_VERBOSE, "Message sent to kernel. sent=%d, msg len=%d.\n",
+                        ret, total_len);
     if (nlmsg)
         free(nlmsg);
 
-    return ret;
+    return ret == total_len? 0 : -1;
 }
 
 /*
-    gnl_get_fam() - Get id of a custom NL family by the name.
+    gnl_get_fam_id() - Get id of the custom NL family by the name.
     @gnl_sock: Generic NL socket descriptor.
 
     Return: Family id or -1 on error.
 */
-int gnl_get_fam(int gnl_sock)
+int gnl_get_fam_id(int gnl_sock)
 {
     struct nl_msg *nlmsg;
     struct nlmsghdr *nlhdr;
@@ -196,29 +215,36 @@ int gnl_get_fam(int gnl_sock)
         .gnlattr = &gnl_attr,
         .attrcount = 1,
     };
-    int gnl_fam = -1;
-    int remain;
-    int ret;
+    int gnl_fam = -1, remain, ret;
 
     gnl_attr.type = CTRL_ATTR_FAMILY_NAME;
     gnl_attr.len = strlen(NLMOD_CUSTOM_NAME) + 1;
     gnl_attr.data = NLMOD_CUSTOM_NAME;
 
-    gnl_send_msg(gnl_sock, &cfg);
+    if ((ret = gnl_send_msg(gnl_sock, &cfg)) == -1)
+        return ret;
 
     /* prepare to receive */
     nlmsg = calloc(1, sizeof(struct nl_msg));
-    if (!nlmsg )
-        return ENOMEM;
+    if (!nlmsg) {
+        debug(DEBUG_INFO, "Error: \"%s\".", strerror(errno));
+        return -1;
+    }
 
-    if ((ret = recv(gnl_sock, nlmsg, sizeof(struct nl_msg), 0)) == -1)
+    if ((ret = recv(gnl_sock, nlmsg, sizeof(struct nl_msg), 0)) == -1) {
+        debug(DEBUG_INFO, "Error: \"%s\".", strerror(errno));
         goto fail;
+    } else {
+        debug(DEBUG_INFO, "Received msg len=%d from kernel.\n", ret);
+    }
 
     hexdump((unsigned char *)nlmsg, ret);
 
     nlhdr = &nlmsg->nlhdr;
-    if (nlhdr->nlmsg_type == NLMSG_ERROR || !NLMSG_OK(nlhdr, ret))
+    if (nlhdr->nlmsg_type == NLMSG_ERROR || !NLMSG_OK(nlhdr, ret)) {
+        debug(DEBUG_INFO, "The received message didn't pass validation\n");
         goto fail;
+    }
     /*
     *  Received msg layout:
     *  +------------------------------------------------------------------+
@@ -237,6 +263,7 @@ int gnl_get_fam(int gnl_sock)
 fail:
     if (nlmsg)
         free(nlmsg);
+
     return gnl_fam;
 }
 
@@ -246,7 +273,7 @@ fail:
 */
 int gnl_create_sock(void)
 {
-    int sockd;
+    int sockd, ret;
     struct sockaddr_nl nl_addr;
 
     if ((sockd = socket(AF_NETLINK, SOCK_RAW, NETLINK_GENERIC)) < 0)
@@ -256,15 +283,12 @@ int gnl_create_sock(void)
     nl_addr.nl_family = AF_NETLINK;
     nl_addr.nl_pid = getpid();
 
-    if (bind(sockd, (struct sockaddr *)&nl_addr, sizeof(struct sockaddr_nl)) < 0)
-        goto fail;
+    if ((ret = bind(sockd, (struct sockaddr *)&nl_addr, sizeof(struct sockaddr_nl))) < 0) {
+        close(sockd);
+        return ret;
+    }
 
     return sockd;
-
-fail:
-    if (sockd != -1)
-        close(sockd);
-    return -1;
 }
 
 /*
@@ -289,12 +313,13 @@ int gnl_test_cmd(int gnl_sock, int family)
     };
     int ret = -1;
 
-    gnl_send_msg(gnl_sock, &cfg);
+    if ((ret = gnl_send_msg(gnl_sock, &cfg)) == -1)
+        return ret;
 
     /* prepare to receive */
     nlmsg = calloc(1, sizeof(struct nl_msg));
     if (!nlmsg)
-        return ENOMEM;
+        return -1;
 
     if ((ret = recv(gnl_sock, nlmsg, sizeof(struct nl_msg), 0)) == -1)
         goto fail;
@@ -302,17 +327,21 @@ int gnl_test_cmd(int gnl_sock, int family)
     hexdump((unsigned char *)nlmsg, ret);
 
     nlhdr = &nlmsg->nlhdr;
-    if (nlhdr->nlmsg_type == NLMSG_ERROR || !NLMSG_OK(nlhdr, ret))
+    if (nlhdr->nlmsg_type == NLMSG_ERROR || !NLMSG_OK(nlhdr, ret)) {
+        ret = -1;
         goto fail;
+    }
 
     memset(attrtbl, 0, sizeof(struct nlattr *) * __NLMODULE_MAX);
 
-    if ((ret = gnl_parse_attr(nlhdr, attrtbl)) <= 0)
+    if ((ret = gnl_parse_attr(nlhdr, attrtbl)) <= 0) {
+        debug(DEBUG_INFO, "Error: Expected attributes in the received message.\n");
         goto fail;
+    }
 
     if (attrtbl[NLMODULE_STR]) {
         nla = attrtbl[NLMODULE_STR];
-        printf("Received: %s\n", (const char *)nla_data(nla));
+        printf("attr[NLMODULE_STR]=\"%s\"\n", (const char *)nla_data(nla));
     } else if (attrtbl[NLMODULE_U32]) {
         ;
     }

@@ -11,7 +11,7 @@ int main(int argc, char **argv)
     if ((gnl_sock = gnl_create_sock()) < 0)
         goto out;
 
-    if ((gnl_fam = gnl_get_fam(gnl_sock)) < 0)
+    if ((gnl_fam = gnl_get_fam_id(gnl_sock)) < 0)
         goto out;
 
     printf("Success: family#%d\n", gnl_fam);

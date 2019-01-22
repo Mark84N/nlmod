@@ -19,9 +19,9 @@ struct nl_msg {
     An array of gnl_attr is kept inside msg config.
 */
 struct gnl_attr {
-  int type;
-  int len;
-  void *data;
+    uint16_t type;
+    uint16_t len;
+    void *data;
 };
 
 /*
@@ -83,7 +83,7 @@ static inline struct nlattr *nla_next(struct nlattr *nla, int *remaining)
     pos = nla_next(pos, &(rem)))
 
 int gnl_create_sock(void);
-int gnl_get_fam(int gnl_sock);
+int gnl_get_fam_id(int gnl_sock);
 int gnl_test_cmd(int gnl_sock, int family);
 
 #endif /* __GNL_APP_H__ */
