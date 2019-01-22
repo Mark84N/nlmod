@@ -42,14 +42,19 @@ struct gnl_msg_cfg {
 #define GENLMSG_DATA(nlmsg) \
         ((unsigned char *)(nlmsg) + NLMSG_ALIGN(NLMSG_HDRLEN + GENL_HDRLEN))
 
-static inline uint8_t *nla_data(struct nlattr *nla)
+static inline uint8_t *genlmsg_data(const struct nlmsghdr *nlh)
 {
-    return ((char *)(nla) + NLA_HDRLEN);
+    return ((uint8_t *)(nlh) + NLMSG_ALIGN(NLMSG_HDRLEN + GENL_HDRLEN));
 }
 
-static inline int genlmsg_data_len(const struct nlmsghdr *nh)
+static inline uint8_t *nla_data(struct nlattr *nla)
 {
-    return nh->nlmsg_len - NLMSG_ALIGN(NLMSG_HDRLEN + GENL_HDRLEN);
+    return ((uint8_t *)(nla) + NLA_HDRLEN);
+}
+
+static inline int genlmsg_data_len(const struct nlmsghdr *nlh)
+{
+    return nlh->nlmsg_len - NLMSG_ALIGN(NLMSG_HDRLEN + GENL_HDRLEN);
 }
 
 static inline int nla_ok(const struct nlattr *nla, int remaining)

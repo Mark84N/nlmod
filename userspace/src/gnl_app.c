@@ -62,9 +62,7 @@ static int gnl_parse_attr(struct nlmsghdr *nlh, struct nlattr **attrtbl)
     if (!nlh || !attrtbl)
         return -1;
 
-    memset(attrtbl, 0, sizeof(struct nlattr *) * __NLMODULE_MAX);
-    nla = (struct nlattr *)GENLMSG_DATA(nlh);
-
+    nla = (struct nlattr *)genlmsg_data(nlh);
     nla_for_each_attr(nla, genlmsg_data_len(nlh), remain) {
         if (nla && nla_type_ok(nla)) {
             attrcount++;
@@ -123,7 +121,7 @@ static int gnl_send_msg(int gnl_sock, struct gnl_msg_cfg *cfg)
     nlmsg->gnlhdr.cmd = cfg->gnl_cmd;
 
     /* start location to write attributes */
-    nla = (struct nlattr *)GENLMSG_DATA(nlhdr);
+    nla = (struct nlattr *)genlmsg_data(nlhdr);
     gnl_attr = cfg->gnlattr;
 
     /* append attributes to the nlmsg */
@@ -227,7 +225,8 @@ int gnl_get_fam(int gnl_sock)
     *  | NLMSGHDR | PAD | GENLMSGHDR | PAD | NLA_HDR | NLA_DATA | PAD | ...
     *  +------------------------------------------------------------------+
     */
-    nla = (struct nlattr *)GENLMSG_DATA(nlhdr);
+    nla = (struct nlattr *)genlmsg_data(nlhdr);
+
     nla_for_each_attr(nla, genlmsg_data_len(nlhdr), remain) {
         if (nla->nla_type == CTRL_ATTR_FAMILY_ID) {
             gnl_fam = *(uint16_t *)nla_data(nla);
@@ -305,6 +304,8 @@ int gnl_test_cmd(int gnl_sock, int family)
     nlhdr = &nlmsg->nlhdr;
     if (nlhdr->nlmsg_type == NLMSG_ERROR || !NLMSG_OK(nlhdr, ret))
         goto fail;
+
+    memset(attrtbl, 0, sizeof(struct nlattr *) * __NLMODULE_MAX);
 
     if ((ret = gnl_parse_attr(nlhdr, attrtbl)) <= 0)
         goto fail;
