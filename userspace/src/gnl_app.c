@@ -118,7 +118,7 @@ static int gnl_send_msg(int gnl_sock, struct gnl_msg_cfg *cfg)
 
     nlmsg = calloc(1, sizeof(struct nl_msg));
     if (!nlmsg) {
-        debug(DEBUG_INFO, "Error: \"%s\".", strerror(errno));
+        debug(DEBUG_INFO, "Error: \"%s\".\n", strerror(errno));
         return -1;
     }
 
@@ -189,7 +189,7 @@ static int gnl_send_msg(int gnl_sock, struct gnl_msg_cfg *cfg)
     }
 
     if (ret > 0)
-        debug(DEBUG_VERBOSE, "Message sent to kernel. sent=%d, msg len=%d.\n",
+        debug(DEBUG_INFO, "Message sent to kernel: sent=%d, msg len=%d.\n",
                         ret, total_len);
     if (nlmsg)
         free(nlmsg);
@@ -228,15 +228,15 @@ int gnl_get_fam_id(int gnl_sock)
     /* prepare to receive */
     nlmsg = calloc(1, sizeof(struct nl_msg));
     if (!nlmsg) {
-        debug(DEBUG_INFO, "Error: \"%s\".", strerror(errno));
+        debug(DEBUG_INFO, "Error: \"%s\".\n", strerror(errno));
         return -1;
     }
 
     if ((ret = recv(gnl_sock, nlmsg, sizeof(struct nl_msg), 0)) == -1) {
-        debug(DEBUG_INFO, "Error: \"%s\".", strerror(errno));
+        debug(DEBUG_INFO, "Error: \"%s\".\n", strerror(errno));
         goto fail;
     } else {
-        debug(DEBUG_INFO, "Received msg len=%d from kernel.\n", ret);
+        debug(DEBUG_INFO, "Received msg from kernel, len=%d.\n", ret);
     }
 
     hexdump((unsigned char *)nlmsg, ret);
@@ -244,6 +244,7 @@ int gnl_get_fam_id(int gnl_sock)
     nlhdr = &nlmsg->nlhdr;
     if (nlhdr->nlmsg_type == NLMSG_ERROR || !NLMSG_OK(nlhdr, ret)) {
         debug(DEBUG_INFO, "The received message didn't pass validation\n");
+        ret = -1;
         goto fail;
     }
     /*
@@ -277,14 +278,17 @@ int gnl_create_sock(void)
     int sockd, ret;
     struct sockaddr_nl nl_addr;
 
-    if ((sockd = socket(AF_NETLINK, SOCK_RAW, NETLINK_GENERIC)) < 0)
+    if ((sockd = socket(AF_NETLINK, SOCK_RAW, NETLINK_GENERIC)) < 0) {
+        debug(DEBUG_INFO, "Error: \"%s\".\n", strerror(errno));
         return -1;
+    }
 
     memset(&nl_addr, 0, sizeof(struct sockaddr_nl));
     nl_addr.nl_family = AF_NETLINK;
     nl_addr.nl_pid = getpid();
 
     if ((ret = bind(sockd, (struct sockaddr *)&nl_addr, sizeof(struct sockaddr_nl))) < 0) {
+        debug(DEBUG_INFO, "Error: \"%s\".\n", strerror(errno));
         close(sockd);
         return ret;
     }
@@ -319,16 +323,23 @@ int gnl_test_cmd(int gnl_sock, int family)
 
     /* prepare to receive */
     nlmsg = calloc(1, sizeof(struct nl_msg));
-    if (!nlmsg)
+    if (!nlmsg) {
+        debug(DEBUG_INFO, "Error: \"%s\".\n", strerror(errno));
         return -1;
+    }
 
-    if ((ret = recv(gnl_sock, nlmsg, sizeof(struct nl_msg), 0)) == -1)
+    if ((ret = recv(gnl_sock, nlmsg, sizeof(struct nl_msg), 0)) == -1) {
+        debug(DEBUG_INFO, "Error: \"%s\".\n", strerror(errno));
         goto fail;
+    } else {
+        debug(DEBUG_INFO, "Received msg from kernel, len=%d.\n", ret);
+    }
 
     hexdump((unsigned char *)nlmsg, ret);
 
     nlhdr = &nlmsg->nlhdr;
     if (nlhdr->nlmsg_type == NLMSG_ERROR || !NLMSG_OK(nlhdr, ret)) {
+        debug(DEBUG_INFO, "The received message didn't pass validation\n");
         ret = -1;
         goto fail;
     }
@@ -337,6 +348,7 @@ int gnl_test_cmd(int gnl_sock, int family)
 
     if ((ret = gnl_parse_attr(nlhdr, attrtbl)) <= 0) {
         debug(DEBUG_INFO, "Error: Expected attributes in the received message.\n");
+        ret = -1;
         goto fail;
     }
 
