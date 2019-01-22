@@ -182,7 +182,8 @@ static int gnl_send_msg(int gnl_sock, struct gnl_msg_cfg *cfg)
                         retry + 1, err, strerror(err));
         usleep(250 * 1000); // 250 msec
         if (retry++ >= 5) {
-            debug(DEBUG_VERBOSE, "Retry count exceeded.\n")
+            debug(DEBUG_INFO, "Retry count [5] exceeded. Error description: \"%s\"\n",
+                        strerror(err));
             break;
         }
     }
