@@ -14,15 +14,11 @@ int main(int argc, char **argv)
     if ((gnl_fam = gnl_get_fam_id(gnl_sock)) < 0)
         goto out;
 
-    printf("Success: family#%d\n", gnl_fam);
-
     if (gnl_test_cmd(gnl_sock, gnl_fam) < 0)
         goto out;
 
     ret = 0;
 out:
-    if (ret != 0)
-        perror("error");
     if (gnl_sock != -1)
         close(gnl_sock);
 

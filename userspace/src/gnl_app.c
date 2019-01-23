@@ -64,7 +64,7 @@ void hexdump(const unsigned char *data, size_t size)
     @nlh: Pointer to a nlmsghdr received.
     @attrtbl: Pointer to array of struct nlattr *, array len=__NLMODULE_MAX.
 
-    Return: Number of attributes parsed or -1 on error.
+    Return: Number of attributes parsed.
 */
 static int gnl_parse_attr(struct nlmsghdr *nlh, struct nlattr **attrtbl)
 {
@@ -244,7 +244,6 @@ int gnl_get_fam_id(int gnl_sock)
     nlhdr = &nlmsg->nlhdr;
     if (nlhdr->nlmsg_type == NLMSG_ERROR || !NLMSG_OK(nlhdr, ret)) {
         debug(DEBUG_INFO, "The received message didn't pass validation\n");
-        ret = -1;
         goto fail;
     }
     /*
@@ -258,6 +257,9 @@ int gnl_get_fam_id(int gnl_sock)
     nla_for_each_attr(nla, genlmsg_data_len(nlhdr), remain) {
         if (nla->nla_type == CTRL_ATTR_FAMILY_ID) {
             gnl_fam = *(uint16_t *)nla_data(nla);
+            debug(DEBUG_VERBOSE, "Attribute: attrtype=CTRL_ATTR_FAMILY_ID,"
+            " attrlen=%hu, famId=%d.\n", nla->nla_len, gnl_fam);
+
             break;
         }
     }
@@ -346,7 +348,8 @@ int gnl_test_cmd(int gnl_sock, int family)
 
     memset(attrtbl, 0, sizeof(struct nlattr *) * __NLMODULE_MAX);
 
-    if ((ret = gnl_parse_attr(nlhdr, attrtbl)) <= 0) {
+    /* error if payload is present but we failed to parse at least 1 attribute */
+    if (genlmsg_data_len(nlhdr) && (gnl_parse_attr(nlhdr, attrtbl) == 0)) {
         debug(DEBUG_INFO, "Error: Expected attributes in the received message.\n");
         ret = -1;
         goto fail;
