@@ -108,8 +108,6 @@ static int gnl_parse_attr(struct nlmsghdr *nlh, struct nlattr **attrtbl)
 static int gnl_send_msg(int gnl_sock, struct gnl_msg_cfg *cfg)
 {
     struct sockaddr_nl nl_addr;
-    struct iovec iov;
-    struct msghdr msg;
     struct nlmsghdr *nlhdr;
     struct nlattr *nla;
     struct gnl_attr *gnl_attr;
@@ -163,18 +161,9 @@ static int gnl_send_msg(int gnl_sock, struct gnl_msg_cfg *cfg)
     nl_addr.nl_family = AF_NETLINK;
     nl_addr.nl_pid = 0;
 
-    iov.iov_base = nlmsg;
-    iov.iov_len = total_len;
-
-    memset(&msg, 0, sizeof(struct msghdr));
-    msg.msg_name = &nl_addr;
-    msg.msg_namelen = sizeof(nl_addr);
-    msg.msg_iov = &iov;
-    msg.msg_iovlen = 1;
-
     hexdump((unsigned char *)nlmsg, total_len);
-
-    while ((ret = sendmsg(gnl_sock, &msg, 0)) == -1) {
+    while ((ret = sendto(gnl_sock, nlmsg, total_len, 0, (struct sockaddr *)&nl_addr,
+                sizeof(nl_addr))) == -1) {
         static int retry = 0;
         int err = errno;
         debug(DEBUG_VERBOSE, "Failed to send message. Attempt=%d, errno=%d, "
@@ -257,7 +246,7 @@ int gnl_get_fam_id(int gnl_sock)
     nla_for_each_attr(nla, genlmsg_data_len(nlhdr), remain) {
         if (nla->nla_type == CTRL_ATTR_FAMILY_ID) {
             gnl_fam = *(uint16_t *)nla_data(nla);
-            debug(DEBUG_VERBOSE, "Attribute: attrtype=CTRL_ATTR_FAMILY_ID,"
+            debug(DEBUG_VERBOSE, "Received attribute: attrtype=CTRL_ATTR_FAMILY_ID,"
             " attrlen=%hu, famId=%d.\n", nla->nla_len, gnl_fam);
 
             break;
@@ -357,7 +346,7 @@ int gnl_test_cmd(int gnl_sock, int family)
 
     if (attrtbl[NLMODULE_STR]) {
         nla = attrtbl[NLMODULE_STR];
-        printf("attr[NLMODULE_STR]=\"%s\"\n", (const char *)nla_data(nla));
+        debug(DEBUG_INFO, "attr[NLMODULE_STR]=\"%s\"\n", (const char *)nla_data(nla));
     } else if (attrtbl[NLMODULE_U32]) {
         ;
     }
